@@ -26,10 +26,10 @@ border c1b2(t=0.48,0.52){x = 0.52; y = t; label=5;};
 border c1b3(t=0.52,0.48){x = t; y = 0.52; label=5;};
 border c1b4(t=0.52,0.48){x = 0.48; y = t; label=5;};
 // C2
-border c2b1(t=0.28,0.32){x = t; y = 0.28; label=5;};
-border c2b2(t=0.28,0.32){x = 0.32; y = t; label=5;};
-border c2b3(t=0.32,0.28){x = t; y = 0.32; label=5;};
-border c2b4(t=0.32,0.28){x = 0.28; y = t; label=5;};
+border c2b1(t=0.28,0.32){x = t; y = 0.28; label=6;};
+border c2b2(t=0.28,0.32){x = 0.32; y = t; label=6;};
+border c2b3(t=0.32,0.28){x = t; y = 0.32; label=6;};
+border c2b4(t=0.32,0.28){x = 0.28; y = t; label=6;};
 
 
 // ---------- macros ----------
@@ -89,9 +89,10 @@ for (int i=0; i<I; i++){
 
 	// Spaces
 	fespace Vh (Th, RT0);
-	fespace Qh (Th,P0);
+	fespace Qh (Th,P1);
 	fespace Ch (Th,P1);
-	fespace Zh(Th,P0);
+
+	fespace Zh(Th,P0); // const
 
 	// Set regions
 	Zh reg=region;
@@ -107,8 +108,8 @@ for (int i=0; i<I; i++){
 	hvect[i]=h[].max;
 
 	// Set functions
-	Zh fh = f*(region==regC1) + 0.*(region==regC2) + 0.*(region==regDomain);
-	Zh gh = 0.*(region==regC1) + g*(region==regC2) + 0.*(region==regDomain);
+	Zh fh = -1000.0*(region==regC1) + 0.*(region==regC2) + 0.*(region==regDomain);
+	Zh gh = 0.*(region==regC1) + 1000.0*(region==regC2) + 0.*(region==regDomain);
 
 	// Set variables
 	Vh [uh1,uh2],[vh1,vh2];
@@ -120,10 +121,12 @@ for (int i=0; i<I; i++){
 	problem Darcy([uh1,uh2,ph],[vh1,vh2,qh]) =
 		int2d(Th)(uh1*vh1+uh2*vh2)
 		+int2d(Th)(ph*div(vh1,vh2))
-		-int1d(Th,4)(ph*(N.x*vh1+N.y*vh2))
-		-int1d(Th,2)(ph*(N.x*vh1+N.y*vh2))
+		-int1d(Th,2)(pout*vh1)
+		-int1d(Th,4)(-pin*vh1)
 		+int2d(Th)(qh*div(uh1,uh2))
 		-int2d(Th)(f*qh);
+		//-int1d(Th,4)(ph*(N.x*vh1+N.y*vh2))
+		//-int1d(Th,2)(ph*(N.x*vh1+N.y*vh2))
 		//+on(2,ph=pout)
 		//+on(4,ph=pin); //
 	// Solve Darcy

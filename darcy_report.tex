@@ -1,21 +1,26 @@
 \documentclass[conference]{IEEEtran}
 \usepackage{cite}
 \usepackage{graphicx}
-\usepackage{amsmath}
-\usepackage{amssymb}
+% \usepackage{amsmath} %\usepackage{amssymb}
+\usepackage{amsmath,amssymb,amsthm}
 %\usepackage{algorithmic}
 \usepackage{fixltx2e}
 \usepackage{stfloats}
 \usepackage{url}
 \usepackage{hyperref}
 \usepackage{xcolor}
-\usepackage[utf8]{inputenc}
+
 \usepackage[justification=centering,font=small]{caption}
 \usepackage{movie15}
 \usepackage[normalem]{ulem}
 \usepackage{bm}
 \useunder{\uline}{\ul}{}
 \newcommand{\norm}[1]{\left\lVert#1\right\rVert}
+% for theorems &Co
+\usepackage[utf8]{inputenc}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{corollary}{Corollary}[theorem]
+\newtheorem{lemma}[theorem]{Lemma}
 
 \begin{document}
 %
@@ -25,7 +30,7 @@
 % not capitalized unless they are the first or last word of the title.
 % Linebreaks \\ can be used within to get better formatting as desired.
 % Do not put math or special symbols in the title.
-\title{Darcy flow: Pollution of a drinking water reservoir}
+\title{Darcy flow:\\ Pollution of a drinking water reservoir}
 
 % author names and affiliations
 % use a multiple column layout for up to three different
@@ -40,18 +45,22 @@
 \vspace{-10cm}
 
 \begin{abstract}
-This paper reports the solutions of a problem of drinking water pollution using Finite Elements methods. In particular, since it involves the Darcy Equations, we will explore the use of the Raviart Thomas elements. The corresponding code implemented in FreeFem++ can be found on github: \url{https://github.com/LucaZampieri/Darcy_Flow}. This project is part of the course MA-468: Numerical Methods for Saddle Point Problems given by Prof. Annalisa Buffa at EPFL.
+This paper reports the solutions of a problem of drinking water pollution using Finite Elements methods. In particular, since it involves the Darcy Equations, we will explore the use of the Raviart Thomas elements. The corresponding code implemented in FreeFem++ as well as the source of this report can be found on github: \url{https://github.com/LucaZampieri/Darcy_Flow}. This project is part of the course MA-468: Numerical Methods for Saddle Point Problems given by Prof. Annalisa Buffa at EPFL.
 
 \end{abstract}
 \IEEEpeerreviewmaketitle
 \section{Notations}
-We will use standard notation, complemented by the following:
+We will use standard notation, complemented by the following (even if some are quite informal):
 \begin{itemize}
-\item $\norm{\cdot}_0 = \norm{\cdot}_{L^2(\Omega)}$
-\item $H^1_0(\Omega)= \{ x \in H^1(\Omega) : x{\restriction}_{\partial \Omega}=0 \}$
+\item $\norm{\cdot}_0 = \norm{\cdot}_{[L^2(\Omega)]^d}$, $\forall d$ number of dimensions
 \item $\Gamma_{ij} = \Gamma_i \cup \Gamma_j$    with $ i,j < 10$
-\item $H^1_{0,\Gamma_{ij}}(\Omega)= \{ x \in H^1(\Omega) : x{\restriction}_{\Gamma_{ij}}=0 \}$
+\item $H^1_0(\Omega)= \{ x \in H^1(\Omega) : x{\restriction}_{\partial \Omega}=0 \}$
+\item $H^1_{0,\Gamma}(\Omega)= \{ x \in H^1(\Omega) : x{\restriction}_{\Gamma}=0 \}$
+\item $H(div,\Omega) = \{ x \in H^1(\Omega) : div(x) = 0\}$
+\item $H_{0}(div,\Omega) = \{ x \in H(div,\Omega) : x\cdot n{\restriction}_{\partial \Omega} = 0\}$
+\item $H_{0,\Gamma}(div,\Omega) = \{ x \in H(div,\Omega) : x\cdot n{\restriction}_\Gamma = 0\}$
 \end{itemize}
+if the domain of the space is omitted, it is assumed to be $\Omega$.
 
 
 \section{Problem (question 1)}
@@ -77,22 +86,42 @@ Considering $\Omega = [0,1]^2$ with border $\Gamma_i , i=1:4$ denoted in anti-cl
     \end{cases}
     \label{eq:advection}
 \end{equation}
-Where \ref{eq:darcy} is a darcy equation and \ref{eq:advection} is an advection-diffusion equation.We are then interested in the quantity $\phi(c) = \int_{C_1} c$.
+Where \ref{eq:darcy} is a darcy equation, \ref{eq:advection} is an advection-diffusion equation and $f,g$ are defined as:
+\begin{equation}
+	f(\textbf{x})=
+    \begin{cases}
+      -1000,   & \text{if } \textbf{x} \in C_1 \\
+      0,       & \text{if } \textbf{x} \notin C_1 \\
+    \end{cases}
+\end{equation}
+and
+\begin{equation}
+	g(\textbf{x})=
+    \begin{cases}
+      1000, & \text{if } \textbf{x} \in C_2 \\
+      0,    & \text{if } \textbf{x} \notin C_2 \\
+    \end{cases}
+\end{equation}
+as such $f,g \in L^{\infty}(\Omega)$.\\
+We fix $k=I$, $p_{in} = 2$ and $p_{out} = 0$. We are then interested in the quantity $\phi(c) = \int_{C_1} c$.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%% Weak Form %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Weak forms (question 1)}
-We want to prove the well-posedness of the system of equations. For this we rewrite the sytem of equations (\ref{eq:darcy},\ref{eq:advection} ) in the following form:
+We want to prove the well-posedness of the system of equations. For this we rewrite the sytem of equations (\ref{eq:darcy},\ref{eq:advection} ) in the following form:\\
+Find $\textbf{u} \in V$, $q \in Q$, $c \in W$ such that:  
 \begin{equation}
     \begin{cases}
-      a(u,v)+b(p,v) = F_a(v) , \forall \textbf{v} \in V \\
-      b(u,q) = F_b(q) , \forall q \in Q
+      a(u,v)+b(p,v) = F_a(v) , &\forall \textbf{v} \in V \\
+      b(u,q) = F_b(q) ,        &\forall q \in Q \\
+      a_{ad}(c,w) = G(w) ,     &\forall w \in W
     \end{cases}
+    \label{eq:weak}
 \end{equation}
-\begin{equation}
-    a_{ad}(c,w)=G(w) \forall w in W
-\end{equation}
+
 where $a,b,a_{ad}$ are bilinear forms and $F_a, F_b, G$ are linear operators.
 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%   Darcy Weak   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Darcy equation}
 For the Darcy equation we seek a mixed-form weak formulation. We set the spaces
 $V=H(div,\Omega)$ and $Q=L^2(\Omega)$. Multiplying the first equation of \ref{eq:darcy} by a test function $v\in V$, the second equation by a test function $q\in Q$ and integrating we get:
@@ -109,25 +138,74 @@ Find \textbf{u} $\in V$, q $\in Q$ such that  :
 \begin{equation}
     \begin{cases}
       \int_\Omega -k^{-1}\textbf{u}\cdot \textbf{v} + \int_\Omega  p (\nabla\cdot \textbf{v})
-      - \int_{\partial\Omega}  p(\textbf{n}\cdot \textbf{v})   = 0 , & \forall \textbf{v} \in V  \\
+      = \int_{\partial\Omega}  \tilde{p} (\textbf{n}\cdot \textbf{v})  , & \forall \textbf{v} \in V  \\
       \int_\Omega (\nabla \cdot \textbf{u})q = \int_\Omega fq, & \forall q \in Q 
     \end{cases}
     \label{eq:darcy_weak}
 \end{equation}
-From the theory on mixed-forms, to prove well-posedness we need:
+with $\tilde{p}$ is such that $\tilde{p}{\restriction}_{\Gamma_{13}} = 0 $, $\tilde{p}{\restriction}_{\Gamma_2} = p_{out} $ and $\tilde{p}{\restriction}_{\Gamma_4} = p_{in} $
+Which is the form we desired (\ref{eq:weak}) since $a,b$ are clearly bilinear and $F_a,F_b$ are trivialy linear. \\
+From the theory on mixed-forms, to prove well-posedness we additionally need:
 \begin{itemize}
-\item Coercivity on the Kernel
-\item Inf-Sup conditions
+\item Coercivity on the Kernel i.e. $a(u_0,u_0) \geq \alpha \norm{u_0}_{H(div,\Omega)}^2$ , $\forall u_0 \in Ker(B)$ where $Ker(B)=\{v \in H_{0,\Gamma_{13}} : div(v)=0 \}$
+\item Inf-Sup conditions i.e: $ inf_{q\in Q} sup_{v\in V} \frac{ b(v,q) }{ \norm{v}_V \norm{q}_Q } \geq \beta >0   $ 
 \end{itemize}
-\subsubsection{Coercivity on the kernel}
+We then proceed to prove these two properties:
+%\subsubsection{Coercivity on the kernel}
+\begin{proof}[proof: Coercivity on the kernel]
+We have: 
+$$a(u_0,u_0)=\int k^{-1} |u_0|^2 \geq k_{min} \norm{u_0}^2_{L^2(\Omega)} = \norm{u_0}^2_{H(div,\Omega)}$$ 
+where $k_{min}$ is a minimal eigenvalue of $k$ and where we used both the facts that $k=I$ and that $u_0 \in Ker(B)$ thus $\norm{div(v)}_{L^2(\Omega)}=0$, which concludes the proof.
+\end{proof}
 
-\subsubsection{Inf-Sup Condition}
+%\subsubsection{Inf-Sup Condition}
+\begin{proof}[Proof of Inf-Sup condition]
+Consider the separate problem on the same domain:\\
+Let $f \in L^2(\Omega)$:
+\begin{equation}
+	\begin{cases}
+		-\Delta z = f_L ,  \text{  in } \Omega \\
+		\partial_n z = 0 , \text{  on } \Gamma_{13}
+	\end{cases}
+	\label{eq:laplacian}
+\end{equation}
+which finds solution $z \in H^1(\Omega)$ with $\norm{z}_{H^1(\Omega)} \leq C \norm{f_L}_0 $.\\
+If we now consider $\nabla z \in L^2(\Omega)^2$ of the previous problem, we have $\nabla z \in H_{0,\Gamma_{13}}(div,\Omega)$ and from the solution of the previous problem we get:
+\begin{equation}
+	\norm{\nabla z}_{H_{0,\Gamma_{13}}(div)} \leq C \norm{f_L}_0
+	\label{eq:laplacianContinuity}
+\end{equation} 
+and shows that $B=div: H_{0,\Gamma_{13}}(\Omega) \longrightarrow L^2(\Omega)$ is surjective. \\
+However, by \ref{th:equivalence}, this implies that the inf-sup condition holds.
+\end{proof}
+In parallel we could have done as below \ref{proof:InfSupBis}.
+
+
+\begin{proof}[Proof of Inf-Sup condition BIS]
+\label{proof:InfSupBis}
+We recall that $V=H_{0,\Gamma_{13}}(\Omega)$, $Q=L^2(\Omega)$. By integrating \ref{eq:laplacian} and multiplying by $q\in Q$ 
+\begin{equation}
+	\int_{\Omega} q \cdot div(\nabla z) \geq \norm{f_L}_0 \norm{q}_Q \geq \norm{\nabla z}_V \norm{q}_Q
+\end{equation}
+Since $\nabla z, u \in V$ we can set $u = \nabla z$. Taking the supremum of the LHS we get:
+\begin{equation}
+	sup_{u\in V} \int_{\Omega} q \cdot div(u) \geq \norm{f_L}_0 \norm{q}_Q \geq \norm{u}_V \norm{q}_Q
+\end{equation}
+which can be rewritten as:
+\begin{equation}
+	sup_{u\in V} \frac{ \int_{\Omega} q \cdot div(u)}{\norm{u}_V} \geq  \norm{q}_Q
+\end{equation}
+which is equivalent to the Inf-Sup condition.
+\end{proof}
+
+We can finally conclude on the well-posedness of equation \ref{eq:darcy_weak} by the main theorem of the course \ref{th:mainTheorem}.
 
 
 
 
+%%%%%%%%%%%%%%%%%%%%% advec diffusion  %%%%%%%%%%%%%%%%%%%5
 \subsection{Advection Diffusion}
-Set $W= H^1_{0,\Gamma_1 \cup \Gamma_3 \cup \Gamma_4} $. Multiplying the equation in \ref{eq:advection} by a test function $w \in W$, integrating and using integration by part we can reach the weak formulation:
+Due to the previous subsection, we have $\textbf{u} \in V$. Set $W= H^1_{0,\Gamma_{134}} $. Multiplying the equation in \ref{eq:advection} by a test function $w \in W$, integrating and using integration by part we can reach the weak formulation:\\
 Find $c \in W$ such that:
 \begin{equation}
       a_{ad}(c,w) = \int_\Omega \nu \nabla c \nabla w 
@@ -136,31 +214,127 @@ Find $c \in W$ such that:
     \label{eq:advection_weak}
 \end{equation}
 where we used the fact that $\int_{\partial\Omega} \nu (\nabla c \cdot \textbf{n}) w = 0$ since on $\Gamma_2$ we have homogeneous Neumann conditions and on the rest of $\partial\Omega$ we have $w=0$ since it belongs to $W$. We note that $a_{ad}(c,w)$ is a bilinear form and $G(w)$ a linear operator.\\
-We want to conclude using the Lax-Milgram Lemma thus we search for:
+We want to conclude using the Lax-Milgram Lemma thus we desire:
 \begin{itemize}
-\item Continuity of G(w) which is implicit if $g\in XXXXXXX$
+\item Continuity of G(w) which is implicit since $g\in L^{\infty}(\Omega)$
 \item Continuity of the bilinear form $a_{ad}(c,w)$
 \item Coercivity of the bilinear form $a_{ad}(c,w)$
 \end{itemize}
-we then proceed:
+Note that thanks to the Pointcare inequality \ref{th:pointcare}, the norms $\norm{\cdot}_{H^1}$ and $\norm{\cdot}_{H^1_0}=|\cdot|_{H^1}=\norm{\nabla \cdot}_0$ are equivalent meaning there exist $m,M >0 $ s.t. $m\norm{\cdot}_{H^1} \leq \norm{\cdot}_{H^1_0} \leq M\norm{\cdot}_{H^1}$. \\
+We can proceed:
 \subsubsection{Continuity of the bilinear form} Rewriting
-\begin{equation}
-      |a_{ad}(c,w)| \leq \nu \norm{\nabla c}_0 \norm{\nabla w}_0
-      +
-\end{equation}
+\begin{align}
+	  |a_{ad}(c,w)| 
+      & \leq \nu \norm{\nabla c}_0 \norm{\nabla w}_0 + | \textbf{u} \cdot \nabla c w | \\
+      & \leq \nu \norm{\nabla c}_0 \norm{\nabla w}_0 + \norm{\textbf{u}}_{L^4(\Omega)} \norm{\nabla c}_0 \norm{w}_{L^4(\Omega)} \\
+      & \leq (\nu + \norm{\textbf{u}}_{L^4(\Omega)}) \norm{c}_{H^1} \norm{w}_{H^1}
+\end{align}
+and since $\norm{\cdot}_{H^1}$ and $\norm{\cdot}_{H^1_0}$ are equivalent norms, we have continuity.
 
-\subsubsection{Coercivity of the bilinear form}
-For the coercivity we can make two parallel assumptions:
+\subsubsection{Coercivity of the bilinear form} 
 \begin{equation}
-      a_{ad}(c,c)| = \nu \norm{\nabla c}_0^2 + 
-      +
+      a_{ad}(c,c) = \nu \norm{\nabla c}_0^2 + \int_{\Omega} (\textbf{u}\cdot \nabla c) c
 \end{equation}
+To handle the last term of the equation, we need an assumption. The weakest we found is $\textbf{u} \cdot \textbf{n} \geq 0$. We can rewrite the last term as:
+\begin{align}
+      \int_{\Omega} (\textbf{u}\cdot \nabla c) c 
+      & = \frac{1}{2} \int_{\Omega} \textbf{u}\cdot \nabla (c^2) \\
+      & = - \int_{\Omega} (\nabla \cdot \textbf{u}) c^2 + \int_{\partial \Omega} (\textbf{u} \cdot \textbf{n}) c^2 \\
+\end{align}
+The first term vanishes due to $u\in V$ which is divergence free, and the second term vanishes on $\Gamma_{134}$ since it has diriclet boundary conditions.
+Finally, using $\textbf{u} \cdot \textbf{n} \geq 0$:
+\begin{equation}
+      a_{ad}(c,c) \geq \nu \norm{\nabla c}_0^2 + \int_{\Gamma_2} (\textbf{u}\cdot \textbf{n}) c^2
+      \geq \nu \norm{\nabla c}_0^2
+\end{equation}
+Which proves coercivity of $a_{ad}(\cdot,\cdot)$.\\
+
+
+
+Using Lax-Milgram Lemma \ref{th:laxMilgram} we conclude on the well-posedness of the advection-diffusion equation \ref{eq:advection_weak} thus concluding on the well-posedness of the system of equations.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  Numerical discretization %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Numerical Discretization (Question 2)}
+We should now find a suitable numerical discretization for the weak formulation of both the mixed-form of Darcy problem and the diffusion-advection equation for the pollutant agent, i.e. we want to find the spaces $V_h \subseteq V$, $Q_h \subseteq Q$ and  $W_h \subseteq W$ such tha tthe discrete problem is well-posed. Finally, we will state the expected rate of convergence with these elements.
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  Discrete Darcy %%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Discrete Darcy}
+Lets begin with the Darcy equation. Setting $V_h=$ and $Q_h=$ the discrete problem writes\\
+Find $u_h \in V_h$, $p_h \in Q_h$ s.t.:
+\begin{equation}
+	\begin{cases}
+		\int_{\tau_h} k^{-1} u_h \cdot v_h + \int_{\tau_h} div(v_h) p_h = ... ,&\forall v_h \in V_h \\
+		\int_{\tau_h} div(u_h) q_h = \int_{\tau_h} f\ q_h, &\forall q_h \in Q_h
+	\end{cases}
+	\label{eq:DDarcy}
+\end{equation}
+and again, to prove well-posedness we need the two properties:
+\begin{itemize}
+\item $a(u_h,u_h)=\int_{\tau_h} k^{-1} |u_h|^2 \geq \alpha \norm{u_h}^2_{V_h} , \forall u_h \in Ker(B_h)$
+\item $sup_{u_h \in V_h} \frac{\int_{\tau_h} div(u_h) p_h}{\norm{u_h}_{V_h}} \geq \beta \norm{p_h}_{Q_h}$
+\end{itemize}
+where $\norm{\cdot}_{V_h} = \norm{\cdot}_{V} $, $\norm{\cdot}_{Q_h} = \norm{\cdot}_{Q} $ and $Ker(B_h)=\{u_h \in V_h : \int_{\tau_h} div(u_h) q_h = 0 \forall q_h \in Q_h \}$.\\
+\subsubsection{Discrete coercivity on the kernel}
+\begin{proof}
+Take $q_h = div(u_h)$ (possible since $div(V_h)=Q_h$):
+$$ \int_{\tau_h} |div(u_h)|^2 = 0 \implies div(u_h) = 0 $$
+and $Ker(B_h)\subset Ker(B)$.
+Which implies $, \forall u_h \in Ker(B_h)$:
+\begin{equation}
+ a(u_h,u_h)=\int_{\tau_h} k^{-1} |u_h|^2 \geq \alpha (\norm{u_h}^2_0 + \norm{div(u_h)}^2_0)  
+\end{equation}
+since here $\norm{u_h}^2_0 = \norm{u_h}^2_0 + \norm{div(u_h)}^2_0 = \norm{u_h}^2_{V_h}$ as $\norm{div(u_h)}^2_0 = 0$
+\end{proof}
+\subsubsection{Discrete Inf-Sup conditions}
+\begin{proof}
+From the continuous Inf-Sup condition, with $p_h \in L^2(\Omega)$:
+\begin{equation*}
+	\exists u \in H(div,\Omega) : \frac{ \int_{\Omega} div(u)\cdot p_h}{\norm{u}_V} \geq  \norm{p_h}_0
+\end{equation*}
+by the definition of the $L^2$ projection $\Pi^s$ we have
+\begin{align*}
+	\int_{\tau_h} div(u) p_h &= \int_{\tau_h}\Pi^s(div(u))p_h \\
+	&=\int_{\tau_h} div(I_{RT} u) p_h \\
+	&=\int_{\tau_h} div(u_h) p_h
+\end{align*}
+and by the continuity of $I_{RT}$
+\begin{equation*}
+	\norm{I_{RT}u}_{H(div,\Omega)} \leq C \cdot \norm{u}_{H(div,\Omega)}
+\end{equation*}
+we can then write:
+\begin{align*}
+	 \frac{ \int_{\tau_h} div(u_h)\cdot p_h}{\norm{u_h}_{H(div,\Omega)}}
+	 &= \frac{ \int_{\tau_h} div(u)\cdot p_h}{\norm{u_h}_{H(div,\Omega)}}
+	 & \geq \frac{1}{C} \frac{ \int_{\tau_h} div(u)\cdot p_h}{\norm{u}_{H(div,\Omega)}}
+	 & \geq \frac{\beta}{C} \norm{p_h}_0
+\end{align*}
+proving that the Inf-Sup condition holds
+\end{proof}
+
+Thus the Discrete Darcy problem \ref{eq:DDarcy} is well-posed and verifies optimal error estimates in the energy norms:
+\begin{align*}
+	\norm{u-u_h}_V + \norm{p-p_h}_Q &\leq \\
+	 C (inf_{u_h \in V_H}&\norm{u-vh} + inf_{q_h \in Q_h}\norm{p-p_h}_Q)
+\end{align*}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  Discrete Advec-diff %%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Discrete Advection-Diffusion}
+Setting $W_h=$, the discrete problem writes\\
+Find $c_h \in W_h$ s.t.:
+\begin{equation}
+	  a_{ad}(c_h,w_h) = \int_{\tau_h} \nu \nabla c_h \nabla w_h
+      + \int_{\tau_h} (u_h \cdot \nabla c_h) w_h
+      = \int_{\tau_h} g_h w_h = G(w_h)   	
+\end{equation}
+$\forall w_h \in W_h$.\\
+Repeating the steps done for the continuous case we use the Lax-Milgram Lemma to prove existence and uniqueness of the solution. Moreover, Cea's lemma gives us the error estimate:\\
+$$ \norm{c-c_h}_W \leq \frac{M}{\alpha} inf_{w_h \in W_h} \norm{c-w_h}_W $$
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% RESULTS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{figures}
 
 \begin{figure}[!ht]
@@ -186,14 +360,52 @@ For the coercivity we can make two parallel assumptions:
 \end{minipage} 
 \end{figure}
 
-
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  Appendix %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Appendix}\label{sec:appendix}
+\subsection{Code}
 code: 
+\subsection{Properties, Lemmas \& Theorems}
+Some of these theorems are in the course, the others can be found in \cite{Salsa} and \cite{Perotto}. \\
+\begin{theorem}[Sobolev Embeddings\cite{Salsa}]
+\label{th:sob}
+Let $ u \in H^1(\mathbb{R}^2)$ \\
+Then $u \in L^p(\mathbb{R}^2)$ for $2 \leq p < \infty$, and
+$$\norm{u}_{L^p(\mathbb{R}^2)} \leq c(p) \norm{u}_{H^1(\mathbb{R}^2)} $$
+\end{theorem}
+\begin{lemma}[Lax-Milgram]
+\label{th:laxMilgram}
+
+\end{lemma}
+
+\begin{lemma}[Cea's Lemma]
+\label{th:cea}
+
+\end{lemma}
+
+\begin{lemma}[Pointcare]
+\label{th:pointcare}
+
+\end{lemma}
+
+\begin{theorem}[Existence and uniqueness for mixed form]
+\label{th:mainTheorem}
+
+\end{theorem}
+
+\begin{theorem}[Equivalence for inf-sup Condition]
+\label{th:equivalence}
+
+\end{theorem}
 
 \begin{thebibliography}{1}
 
-\bibitem{lalala}
-lalala
+\bibitem{Salsa}Partial Differential Equations in Action - From Modelling to Theory | Sandro Salsa | Springer.” Accessed June 7, 2018. https://www.springer.com/gp/book/9783319150932.
+
+\bibitem{Perotto}
+“Numerical Models for Differential Problems | Alfio Quarteroni | Springer.” Accessed June 7, 2018. https://www.springer.com/gp/book/9788847058835.
+
+
+
 
 \end{thebibliography}
 
