@@ -1,0 +1,195 @@
+/*
+Written by Luca Zampieri for the course "Numerical methods for Saddle Point Problems"
+Given by Prof. Buffa at EPFL: MATH-468
+
+You should be able to find a version of the code at this github adress:
+https://github.com/LucaZampieri/Darcy_Flow
+
+License: MIT
+If not provided with this code you can find a version of the licence in the following link: https://opensource.org/licenses/MIT
+
+This code solves a problem of pollution of a drinking water reservoir.
+The text describing the problem is under copyright.
+Ask the lecturer if you want a copy.
+*/
+
+
+// ------ squares borders ------
+// the big square
+border b1(t=0,1){x = t; y = 0; label=1;};
+border b2(t=0,1){x = 1; y = t; label=2;};
+border b3(t=1,0){x = t; y = 1; label=3;};
+border b4(t=1,0){x = 0; y = t; label=4;};
+// C1
+border c1b1(t=0.48,0.52){x = t; y = 0.48; label=5;};
+border c1b2(t=0.48,0.52){x = 0.52; y = t; label=5;};
+border c1b3(t=0.52,0.48){x = t; y = 0.52; label=5;};
+border c1b4(t=0.52,0.48){x = 0.48; y = t; label=5;};
+// C2
+border c2b1(t=0.28,0.32){x = t; y = 0.28; label=5;};
+border c2b2(t=0.28,0.32){x = 0.32; y = t; label=5;};
+border c2b3(t=0.32,0.28){x = t; y = 0.32; label=5;};
+border c2b4(t=0.32,0.28){x = 0.28; y = t; label=5;};
+
+
+// ---------- macros ----------
+macro div(u1,u2) (dx(u1)+dy(u2)) //
+macro mydot(u1,u2,v1,v2) (u1*v1+u2*v2) //
+// macro grad(u) ([dx(u),dy(u)]) //
+// macro norm(u1,u2) (u1^2+u2^2)
+
+
+// ---------- parameters ----------
+int I=1;
+real nu = 0.05;
+// functions
+func f     = -1000.0;
+func g     = 1000.0;
+func pin   = 2.0;
+func pout  = 0.0;
+// arrays to store the output
+real[int] hvect(I);
+real[int] errPL2(I);
+real[int] errUL2(I);
+real[int] errPL2Primal(I);
+real[int] errUL2Primal(I);
+real[int] errDivU(I);
+
+
+for (int i=0; i<I; i++){
+
+	int n = 10*2^(i+1); // grid size for the big square
+	int n1 = n/6; int n2 = n1; // grid size for the two small squares
+
+	cout << "\n\n-------------------- NEW ITERATION ---------------------"<<endl;
+	cout << "i:" << i <<endl;
+	cout << "n:" << n <<endl;
+
+	/* // old way of doing the squares
+	real lengthSquares = 0.04;
+	real halfLength = lengthSquares/2.0;
+	cout<<halfLength<<endl;
+	real xC1 = 0.5; real yC1 = 0.5; // coordinates of the center of C1
+	real xC2 = 0.3; real yC2 = 0.3; // coordinates of the center of C2
+	mesh Th = square(n,n); // Omega, the big square
+	mesh C1= square (n1,n1,[xC1-halfLength+(lengthSquares)*x,yC1+halfLength+(lengthSquares)*y]);
+	mesh C2= square (n1,n1,[xC2-halfLength+(lengthSquares)*x,yC2+halfLength+(lengthSquares)*y]);
+	cout<<"region: "<< Th(0.5,0.5).region <<endl;
+	plot(Th,C1,C2,wait=1);
+	*/
+
+	// Build the mesh
+	mesh Th = buildmesh(b1(n)+b2(n)+b3(n)+b4(n)
+	+c1b1(n1)+c1b2(n1)+c1b3(n1)+c1b4(n1)
+	+c2b1(n2)+c2b2(n2)+c2b3(n2)+c2b4(n2));
+	plot(Th,wait=1);
+	cout<<"region of (0,0):     "<< Th(0,0).region <<endl;     // 8
+	cout<<"region of (0.3,0.3): "<< Th(0.3,0.3).region <<endl; // 0
+	cout<<"region of (0.5,0.5): "<< Th(0.5,0.5).region <<endl; // 4
+
+	// Spaces
+	fespace Vh (Th, RT0);
+	fespace Qh (Th,P0);
+	fespace Ch (Th,P1);
+	fespace Zh(Th,P0);
+
+	// Set regions
+	Zh reg=region;
+	int regDomain = reg(0.0,0.0);
+	int regC1 = reg(0.5,0.5);
+	int regC2 = reg(0.3,0.3);
+	cout << "regDomain: " << regDomain
+			 << "\nregC1:   " << regC1
+			 << "\nregC2:   " << regC2 << endl;
+
+	// Store (worst) mesh size
+	Zh h = hTriangle;
+	hvect[i]=h[].max;
+
+	// Set functions
+	Zh fh = f*(region==regC1) + 0.*(region==regC2) + 0.*(region==regDomain);
+	Zh gh = 0.*(region==regC1) + g*(region==regC2) + 0.*(region==regDomain);
+
+	// Set variables
+	Vh [uh1,uh2],[vh1,vh2];
+	Qh ph,qh;
+	Ch ch,wh;
+
+	cout << "\n ------ Problems ------" << endl;
+	// Define the darcy problem
+	problem Darcy([uh1,uh2,ph],[vh1,vh2,qh]) =
+		int2d(Th)(uh1*vh1+uh2*vh2)
+		+int2d(Th)(ph*div(vh1,vh2))
+		-int1d(Th,4)(ph*(N.x*vh1+N.y*vh2))
+		-int1d(Th,2)(ph*(N.x*vh1+N.y*vh2))
+		+int2d(Th)(qh*div(uh1,uh2))
+		-int2d(Th)(f*qh);
+		//+on(2,ph=pout)
+		//+on(4,ph=pin); //
+	// Solve Darcy
+	Darcy;
+
+	// Define advection-diffusion
+	problem AdvecDiff(ch,wh)=
+		int2d(Th)( nu* dx(ch)*dx(wh)+dy(ch)*dy(wh) )
+		+int2d(Th)(wh*(uh1*dx(ch)+uh2*dy(ch)) )
+		-int2d(Th) (gh*wh)
+		+on(1,3,4,ch=0);
+	// Solve Advection-Diffusion
+	AdvecDiff;
+	cout << "\n ------ Solved problems ------" << endl;
+	real phi = int2d(Th,4)(ch);
+	cout << "Pollutant being extracted: " << phi << endl;
+
+	// Make the plots
+	plot(ph,wait=1);
+	plot([uh1,uh2],fill=1,wait=1,coef=0.01,value=1,ps="darcy_uhs.eps");
+	plot(ch,wait=1);
+
+	// Error
+	//-----------------------------------------
+	cout << "\n\n-------------------- ERRORS: ---------------------" << endl;
+	/*
+	errPL2[i] = sqrt( int2d(Th)( (pex-ph)^2 ) );
+	cout << "Error p L2 at iteration: "<< i << "\t" << errPL2[i] << endl;
+
+	errUL2[i] = sqrt( int2d(Th)( (u1ex-uh1)^2+(u2ex-uh2)^2 ) );
+	cout << "Error u L2 at iteration: "<< i << "\t" << errUL2[i] << endl;
+
+	errDivU[i] = sqrt( int2d(Th)( divuex-div(uh1,uh2)) );
+	cout << "Error div(u) L2 at iteration: " << i << "\t" << errDivU[i] << endl;
+
+	// For the primal ---------------------------
+	cout << "Primal Problem" << endl;
+	errPL2Primal[i] = sqrt( int2d(Th)( (pex-p)^2 ) );
+	cout << "Error p Primal L2 at iteration: "<< i << "\t" << errPL2Primal[i] << endl;
+
+	errUL2Primal[i] = sqrt( int2d(Th)( (u1ex+dx(p))^2+(u2ex+dy(p))^2 ) );
+	cout << "Error u L2 at iteration: "<< i << "\t" << errUL2Primal[i] << endl;
+	*/
+	cout << "\n\n-------------------- END FOR LOOP ---------------------"<<endl;
+}
+
+/*
+ofstream fileh("h_vect.dat");
+fileh << hvect << endl;
+
+// for mixed problem
+ofstream filePL2Mixed("pl2_mixed_vect.dat");
+filePL2Mixed << errPL2 << endl;
+ofstream fileUL2Mixed("ul2_mixed_vect.dat");
+fileUL2Mixed << errUL2 << endl;
+ofstream fileDivuL2Mixed("divul2_mixed_vect.dat");
+fileDivuL2Mixed << errDivU << endl;
+
+// for primal problem
+ofstream filePL2primal("pl2_primal_vect.dat");
+filePL2primal << errPL2Primal << endl;
+ofstream fileUL2primal("ul2_primal_vect.dat");
+fileUL2primal << errUL2Primal << endl;
+// */
+
+
+
+
+// end of file

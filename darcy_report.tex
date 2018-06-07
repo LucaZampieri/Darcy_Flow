@@ -1,0 +1,200 @@
+\documentclass[conference]{IEEEtran}
+\usepackage{cite}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+%\usepackage{algorithmic}
+\usepackage{fixltx2e}
+\usepackage{stfloats}
+\usepackage{url}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage[utf8]{inputenc}
+\usepackage[justification=centering,font=small]{caption}
+\usepackage{movie15}
+\usepackage[normalem]{ulem}
+\usepackage{bm}
+\useunder{\uline}{\ul}{}
+\newcommand{\norm}[1]{\left\lVert#1\right\rVert}
+
+\begin{document}
+%
+% paper title
+% Titles are generally capitalized except for words such as a, an, and, as,
+% at, but, by, for, in, nor, of, on, or, the, to and up, which are usually
+% not capitalized unless they are the first or last word of the title.
+% Linebreaks \\ can be used within to get better formatting as desired.
+% Do not put math or special symbols in the title.
+\title{Darcy flow: Pollution of a drinking water reservoir}
+
+% author names and affiliations
+% use a multiple column layout for up to three different
+% affiliations
+\author{
+\IEEEauthorblockN{Zampieri Luca}
+\IEEEauthorblockA{Computational Science \& Engineering\\
+\href{mailto:luca.zampieri@epfl.ch}{Email: luca.zampieri@epfl.ch}}
+}
+
+\maketitle
+\vspace{-10cm}
+
+\begin{abstract}
+This paper reports the solutions of a problem of drinking water pollution using Finite Elements methods. In particular, since it involves the Darcy Equations, we will explore the use of the Raviart Thomas elements. The corresponding code implemented in FreeFem++ can be found on github: \url{https://github.com/LucaZampieri/Darcy_Flow}. This project is part of the course MA-468: Numerical Methods for Saddle Point Problems given by Prof. Annalisa Buffa at EPFL.
+
+\end{abstract}
+\IEEEpeerreviewmaketitle
+\section{Notations}
+We will use standard notation, complemented by the following:
+\begin{itemize}
+\item $\norm{\cdot}_0 = \norm{\cdot}_{L^2(\Omega)}$
+\item $H^1_0(\Omega)= \{ x \in H^1(\Omega) : x{\restriction}_{\partial \Omega}=0 \}$
+\item $\Gamma_{ij} = \Gamma_i \cup \Gamma_j$    with $ i,j < 10$
+\item $H^1_{0,\Gamma_{ij}}(\Omega)= \{ x \in H^1(\Omega) : x{\restriction}_{\Gamma_{ij}}=0 \}$
+\end{itemize}
+
+
+\section{Problem (question 1)}
+For the complete statement of the problem, refer to the sheet given by the assistants. Here we make a quick reminder of the problem.\\
+Consider a drinking water reservoir with fluid flowing left to right of the domain $\Omega$. There is a pollution accident at $C_2$ and a pump is placed at the center of the domain in $C_1$. We are interested in knowing how much pollutant has been extracted by the pump. \\
+Considering $\Omega = [0,1]^2$ with border $\Gamma_i , i=1:4$ denoted in anti-clockwise sense, $C_1 = [0.48,0.52]^2 \in \Omega$ and $C_2=[0.28,0.32]^2 \in \Omega$. We then have to solve the equations:
+
+\begin{equation}
+    \begin{cases}
+      -k \nabla p = \textbf{u} , & \text{in $\Omega$}  \\
+      \nabla \cdot \textbf{u}, & \text{in $\Omega$} \\
+      p=p_{in} , & \text{on $\Gamma_4$} \\
+      p=p_{out} , & \text{on $\Gamma_2$} \\
+      \textbf{u} \cdot \textbf{n} = 0, & \text{on } \Gamma_1 \cup \Gamma_3
+    \end{cases}
+    \label{eq:darcy}
+\end{equation}
+\begin{equation}
+    \begin{cases}
+      -\nu \Delta c + \textbf{u} \cdot \nabla c = g ,& \text{in $\Omega$}  \\
+      c = 0, & \text{on } \Gamma_1 \cup \Gamma_3 \cup \Gamma_4 \\
+      \nu \nabla c \cdot \textbf{n} = 0, & \text{on } \Gamma_2
+    \end{cases}
+    \label{eq:advection}
+\end{equation}
+Where \ref{eq:darcy} is a darcy equation and \ref{eq:advection} is an advection-diffusion equation.We are then interested in the quantity $\phi(c) = \int_{C_1} c$.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%% Weak Form %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Weak forms (question 1)}
+We want to prove the well-posedness of the system of equations. For this we rewrite the sytem of equations (\ref{eq:darcy},\ref{eq:advection} ) in the following form:
+\begin{equation}
+    \begin{cases}
+      a(u,v)+b(p,v) = F_a(v) , \forall \textbf{v} \in V \\
+      b(u,q) = F_b(q) , \forall q \in Q
+    \end{cases}
+\end{equation}
+\begin{equation}
+    a_{ad}(c,w)=G(w) \forall w in W
+\end{equation}
+where $a,b,a_{ad}$ are bilinear forms and $F_a, F_b, G$ are linear operators.
+
+\subsection{Darcy equation}
+For the Darcy equation we seek a mixed-form weak formulation. We set the spaces
+$V=H(div,\Omega)$ and $Q=L^2(\Omega)$. Multiplying the first equation of \ref{eq:darcy} by a test function $v\in V$, the second equation by a test function $q\in Q$ and integrating we get:
+\begin{equation}
+    \begin{cases}
+      \int_\Omega-k^{-1}\textbf{u}\cdot \textbf{v} 
+      -\int_\Omega \nabla p \cdot \textbf{v} = 0 , & \forall \textbf{v} \in V  \\
+      \int_\Omega (\nabla \cdot \textbf{u})q = \int_\Omega fq, & \forall q \in Q \\
+    \end{cases}
+    \label{eq:darcy_tmp}
+\end{equation}
+Integrating by parts the second term of the first equation of \ref{eq:darcy_tmp} and applying boundary conditions we get the mixed-form weak formulation:\\
+Find \textbf{u} $\in V$, q $\in Q$ such that  :
+\begin{equation}
+    \begin{cases}
+      \int_\Omega -k^{-1}\textbf{u}\cdot \textbf{v} + \int_\Omega  p (\nabla\cdot \textbf{v})
+      - \int_{\partial\Omega}  p(\textbf{n}\cdot \textbf{v})   = 0 , & \forall \textbf{v} \in V  \\
+      \int_\Omega (\nabla \cdot \textbf{u})q = \int_\Omega fq, & \forall q \in Q 
+    \end{cases}
+    \label{eq:darcy_weak}
+\end{equation}
+From the theory on mixed-forms, to prove well-posedness we need:
+\begin{itemize}
+\item Coercivity on the Kernel
+\item Inf-Sup conditions
+\end{itemize}
+\subsubsection{Coercivity on the kernel}
+
+\subsubsection{Inf-Sup Condition}
+
+
+
+
+\subsection{Advection Diffusion}
+Set $W= H^1_{0,\Gamma_1 \cup \Gamma_3 \cup \Gamma_4} $. Multiplying the equation in \ref{eq:advection} by a test function $w \in W$, integrating and using integration by part we can reach the weak formulation:
+Find $c \in W$ such that:
+\begin{equation}
+      a_{ad}(c,w) = \int_\Omega \nu \nabla c \nabla w 
+      + \int_\Omega (\textbf{u} \cdot \nabla c) w
+      = \int_\omega gw = G(w),  \forall w \in W  \\
+    \label{eq:advection_weak}
+\end{equation}
+where we used the fact that $\int_{\partial\Omega} \nu (\nabla c \cdot \textbf{n}) w = 0$ since on $\Gamma_2$ we have homogeneous Neumann conditions and on the rest of $\partial\Omega$ we have $w=0$ since it belongs to $W$. We note that $a_{ad}(c,w)$ is a bilinear form and $G(w)$ a linear operator.\\
+We want to conclude using the Lax-Milgram Lemma thus we search for:
+\begin{itemize}
+\item Continuity of G(w) which is implicit if $g\in XXXXXXX$
+\item Continuity of the bilinear form $a_{ad}(c,w)$
+\item Coercivity of the bilinear form $a_{ad}(c,w)$
+\end{itemize}
+we then proceed:
+\subsubsection{Continuity of the bilinear form} Rewriting
+\begin{equation}
+      |a_{ad}(c,w)| \leq \nu \norm{\nabla c}_0 \norm{\nabla w}_0
+      +
+\end{equation}
+
+\subsubsection{Coercivity of the bilinear form}
+For the coercivity we can make two parallel assumptions:
+\begin{equation}
+      a_{ad}(c,c)| = \nu \norm{\nabla c}_0^2 + 
+      +
+\end{equation}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  Numerical discretization %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Numerical Discretization (Question 2)}
+
+
+\section{figures}
+
+\begin{figure}[!ht]
+\centering 
+%\includegraphics[width=0.5\textwidth]{images/conv1D.jpg}
+\caption{lala}
+\label{fig:fig7}
+\end{figure}
+
+\begin{figure}[!ht]
+\centering 
+\begin{minipage}[t]{4cm} 
+\centering 
+%\includegraphics[width=4cm]{images/dilation.png}
+\caption{im2} 
+\label{fig:fig8}
+\end{minipage} 
+\begin{minipage}[t]{4cm} 
+\centering 
+%\includegraphics[width=4cm]{images/stride.png}
+\caption{im1}
+\label{fig:fig9}
+\end{minipage} 
+\end{figure}
+
+
+\section{Appendix}\label{sec:appendix}
+code: 
+
+\begin{thebibliography}{1}
+
+\bibitem{lalala}
+lalala
+
+\end{thebibliography}
+
+\end{document}
