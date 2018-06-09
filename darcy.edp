@@ -12,8 +12,8 @@ This code solves a problem of pollution of a drinking water reservoir.
 The text describing the problem is under copyright.
 Ask the lecturer if you want a copy.
 */
-
-
+// Load necessary to use RT1
+load "Element_Mixte"
 // ------ squares borders ------
 // the big square
 border b1(t=0,1){x = t; y = 0; label=1;};
@@ -33,104 +33,119 @@ border c2b4(t=0.32,0.28){x = 0.28; y = t; label=6;};
 
 
 // ---------- macros ----------
-macro div(u1,u2) (dx(u1)+dy(u2)) //
-macro mydot(u1,u2,v1,v2) (u1*v1+u2*v2) //
+//macro div(u1,u2) (dx(u1)+dy(u2)) //
+macro div(v1,v2)(dx(v1)+dy(v2))        // divergence
+macro mydot(u1,u2,v1,v2) (u1*v1+u2*v2) // dot product
+macro dn(u) (N.x*dx(u)+N.y*dy(u) )     // normal derivative
+macro normal(u1,u2)  (N.x*u1+N.y*u2)      // normal component
 // macro grad(u) ([dx(u),dy(u)]) //
 // macro norm(u1,u2) (u1^2+u2^2)
 
 
 // ---------- parameters ----------
+real nu    = 0.05;
+real pin   = 2.0;
+real pout  = 0.0;
+// approximated exact functions
+func pex    = 0.;
+func u1ex   = 0.;
+func u2ex   = 0.;
+func divuex = 0.;
+func cex    = 0.;
+func dxcex  = 0.;
+func dycex  = 0.;
+
+// Iteration parameter
 int I=1;
-real nu = 0.05;
-// functions
-func f     = -1000.0;
-func g     = 1000.0;
-func pin   = 2.0;
-func pout  = 0.0;
+real tol = 0.001;
+
 // arrays to store the output
 real[int] hvect(I);
 real[int] errPL2(I);
 real[int] errUL2(I);
-real[int] errPL2Primal(I);
-real[int] errUL2Primal(I);
 real[int] errDivU(I);
+real[int] errCL2(I);
+real[int] errGradCL2(I);
+
+real phiOld = 1;
+real phiNew = 0;
+int i = -1;
+while (abs(phiOld-phiNew)>0.0001){ i+=1;
+//for (int i=0; i<I; i++){
 
 
-for (int i=0; i<I; i++){
-
-	int n = 10*2^(i+1); // grid size for the big square
-	int n1 = n/6; int n2 = n1; // grid size for the two small squares
+	int n = 10;//10*10*2^(i+1); // grid size for the big square
+	int n1 = 2;//n/6;
+	int n2 = n1; // grid size for the two small squares
 
 	cout << "\n\n-------------------- NEW ITERATION ---------------------"<<endl;
 	cout << "i:" << i <<endl;
 	cout << "n:" << n <<endl;
 
-	/* // old way of doing the squares
-	real lengthSquares = 0.04;
-	real halfLength = lengthSquares/2.0;
-	cout<<halfLength<<endl;
-	real xC1 = 0.5; real yC1 = 0.5; // coordinates of the center of C1
-	real xC2 = 0.3; real yC2 = 0.3; // coordinates of the center of C2
-	mesh Th = square(n,n); // Omega, the big square
-	mesh C1= square (n1,n1,[xC1-halfLength+(lengthSquares)*x,yC1+halfLength+(lengthSquares)*y]);
-	mesh C2= square (n1,n1,[xC2-halfLength+(lengthSquares)*x,yC2+halfLength+(lengthSquares)*y]);
-	cout<<"region: "<< Th(0.5,0.5).region <<endl;
-	plot(Th,C1,C2,wait=1);
-	*/
-
 	// Build the mesh
-	mesh Th = buildmesh(b1(n)+b2(n)+b3(n)+b4(n)
+	mesh Th = buildmesh(
+	b1(n)+b2(n)+b3(n)+b4(n)
 	+c1b1(n1)+c1b2(n1)+c1b3(n1)+c1b4(n1)
 	+c2b1(n2)+c2b2(n2)+c2b3(n2)+c2b4(n2));
-	plot(Th,wait=1);
-	cout<<"region of (0,0):     "<< Th(0,0).region <<endl;     // 8
-	cout<<"region of (0.3,0.3): "<< Th(0.3,0.3).region <<endl; // 0
-	cout<<"region of (0.5,0.5): "<< Th(0.5,0.5).region <<endl; // 4
 
 	// Spaces
-	fespace Vh (Th, RT0);
+	fespace Vh (Th, RT1);
 	fespace Qh (Th,P1);
 	fespace Ch (Th,P1);
-
 	fespace Zh(Th,P0); // const
 
-	// Set regions
-	Zh reg=region;
-	int regDomain = reg(0.0,0.0);
-	int regC1 = reg(0.5,0.5);
-	int regC2 = reg(0.3,0.3);
-	cout << "regDomain: " << regDomain
-			 << "\nregC1:   " << regC1
-			 << "\nregC2:   " << regC2 << endl;
-
-	// Store (worst) mesh size
-	Zh h = hTriangle;
-	hvect[i]=h[].max;
-
-	// Set functions
-	Zh fh = -1000.0*(region==regC1) + 0.*(region==regC2) + 0.*(region==regDomain);
-	Zh gh = 0.*(region==regC1) + 1000.0*(region==regC2) + 0.*(region==regDomain);
-
-	// Set variables
+	// Define variables
 	Vh [uh1,uh2],[vh1,vh2];
 	Qh ph,qh;
 	Ch ch,wh;
+	Zh reg=region;
+	Zh h = hTriangle;
+	// Store (worst) mesh size
+	if (i==0){
+		hvect[i]=h[].max;
+	}
+	else {
+		hvect[i]=hvect[0];
+	}
+
+
+	// Set regions
+	int regDomain = reg(0.1,0.1);
+	int regC1     = reg(0.5,0.5);
+	int regC2     = reg(0.3,0.3);
+	cout<<"region of (0.1,0.1): "<< regDomain <<endl; // 8
+	cout<<"region of (0.5,0.5): "<< regC1     <<endl; // 4
+	cout<<"region of (0.3,0.3): "<< regC2     <<endl; // 0
+	// set functions
+	Zh fh = -1000.*(region==regC1) + 0.*(region==regC2) + 0.*(region==regDomain);
+	Zh gh =  1000.*(region==regC2) + 0.*(region==regC1) + 0.*(region==regDomain);
+
+	if (i != 0){
+		Th = splitmesh(Th,2);
+		//Th = adaptmesh(Th, err=tol/(2^i), hmax=hvect[0]/(2^i), iso=1 );
+	}
+	plot(Th,wait=1);
 
 	cout << "\n ------ Problems ------" << endl;
 	// Define the darcy problem
 	problem Darcy([uh1,uh2,ph],[vh1,vh2,qh]) =
-		int2d(Th)(uh1*vh1+uh2*vh2)
+		-int2d(Th)(uh1*vh1+uh2*vh2)
 		+int2d(Th)(ph*div(vh1,vh2))
-		-int1d(Th,2)(pout*vh1)
-		-int1d(Th,4)(-pin*vh1)
 		+int2d(Th)(qh*div(uh1,uh2))
-		-int2d(Th)(f*qh);
-		//-int1d(Th,4)(ph*(N.x*vh1+N.y*vh2))
-		//-int1d(Th,2)(ph*(N.x*vh1+N.y*vh2))
+		-int2d(Th)(fh*qh)
+		-int1d(Th,2)(pout*normal(vh1,vh2))
+		-int1d(Th,4)(pin*(N.x*vh1+N.y*vh2))
+		+on(1,3,uh2=0); // */
+		//-int1d(Th,2)(pout*(N.x*vh1+N.y*vh2))
+		//-int1d(Th,4)(pin*(N.x*vh1+N.y*vh2))
+		//-int1d(Th,2)(pout*vh1)
+		//-int1d(Th,4)(-pin*vh1)
 		//+on(2,ph=pout)
 		//+on(4,ph=pin); //
-	// Solve Darcy
+	// Solve Darcy and plot solutions
 	Darcy;
+	plot(ph,fill=1,value=1,wait=1,ps="darcy_ph.eps");
+	plot([uh1,uh2],wait=1,coef=0.01,value=1,ps="darcy_uhs.eps");
 
 	// Define advection-diffusion
 	problem AdvecDiff(ch,wh)=
@@ -138,21 +153,19 @@ for (int i=0; i<I; i++){
 		+int2d(Th)(wh*(uh1*dx(ch)+uh2*dy(ch)) )
 		-int2d(Th) (gh*wh)
 		+on(1,3,4,ch=0);
-	// Solve Advection-Diffusion
+	// Solve Advection-Diffusion and plot solution
 	AdvecDiff;
+	plot(ch,fill=0,value=1,wait=1,ps="darcy_uhs.eps");
+
 	cout << "\n ------ Solved problems ------" << endl;
-	real phi = int2d(Th,4)(ch);
+	real phi = int2d(Th,regC1)(ch);
 	cout << "Pollutant being extracted: " << phi << endl;
 
-	// Make the plots
-	plot(ph,wait=1);
-	plot([uh1,uh2],fill=1,wait=1,coef=0.01,value=1,ps="darcy_uhs.eps");
-	plot(ch,wait=1);
 
 	// Error
 	//-----------------------------------------
 	cout << "\n\n-------------------- ERRORS: ---------------------" << endl;
-	/*
+
 	errPL2[i] = sqrt( int2d(Th)( (pex-ph)^2 ) );
 	cout << "Error p L2 at iteration: "<< i << "\t" << errPL2[i] << endl;
 
@@ -162,34 +175,36 @@ for (int i=0; i<I; i++){
 	errDivU[i] = sqrt( int2d(Th)( divuex-div(uh1,uh2)) );
 	cout << "Error div(u) L2 at iteration: " << i << "\t" << errDivU[i] << endl;
 
-	// For the primal ---------------------------
-	cout << "Primal Problem" << endl;
-	errPL2Primal[i] = sqrt( int2d(Th)( (pex-p)^2 ) );
-	cout << "Error p Primal L2 at iteration: "<< i << "\t" << errPL2Primal[i] << endl;
+	// For concentration ---------------------------
+	cout << "Concentration Problem" << endl;
+	errCL2[i] = sqrt( int2d(Th)( (cex-ch)^2 ) );
+	cout << "Error c L2 at iteration: "<< i << "\t" << errCL2[i] << endl;
 
-	errUL2Primal[i] = sqrt( int2d(Th)( (u1ex+dx(p))^2+(u2ex+dy(p))^2 ) );
-	cout << "Error u L2 at iteration: "<< i << "\t" << errUL2Primal[i] << endl;
-	*/
+	errGradCL2[i] = sqrt( int2d(Th)( (dxcex-dx(ch))^2+(dycex+dy(ch))^2 ) );
+	cout << "Error grad c L2 at iteration: "<< i << "\t" << errGradCL2[i] << endl;
+	//*/
 	cout << "\n\n-------------------- END FOR LOOP ---------------------"<<endl;
+	phiOld = phiNew;
+	phiNew = phi;
 }
+string DataFolder = "Data/";
 
-/*
-ofstream fileh("h_vect.dat");
+ofstream fileh(DataFolder+"h_vect.dat");
 fileh << hvect << endl;
 
 // for mixed problem
-ofstream filePL2Mixed("pl2_mixed_vect.dat");
+ofstream filePL2Mixed(DataFolder+"pl2_mixed_vect.dat");
 filePL2Mixed << errPL2 << endl;
-ofstream fileUL2Mixed("ul2_mixed_vect.dat");
+ofstream fileUL2Mixed(DataFolder+"ul2_mixed_vect.dat");
 fileUL2Mixed << errUL2 << endl;
-ofstream fileDivuL2Mixed("divul2_mixed_vect.dat");
+ofstream fileDivuL2Mixed(DataFolder+"divul2_mixed_vect.dat");
 fileDivuL2Mixed << errDivU << endl;
 
-// for primal problem
-ofstream filePL2primal("pl2_primal_vect.dat");
-filePL2primal << errPL2Primal << endl;
-ofstream fileUL2primal("ul2_primal_vect.dat");
-fileUL2primal << errUL2Primal << endl;
+// concentration
+ofstream filePL2conc(DataFolder+"Cl2_vect.dat");
+filePL2conc << errCL2 << endl;
+ofstream fileGradCL2(DataFolder+"gradCl2_vect.dat");
+fileGradCL2 << errGradCL2 << endl;
 // */
 
 
