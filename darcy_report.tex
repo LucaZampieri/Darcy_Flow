@@ -364,7 +364,7 @@ Since we may need them for the convergence analysis, let's make few consideratio
 \end{equation}
 for a suitable $\delta > 0$ and where $\rho_k$ is the sphericity of $K$ (i.e. the diameter of the circle inscribed in the triangle K). Note that regularity (\ref{eq:regularMesh}) usually excludes anisotropic grids. Since we will use anisotropic grids it is important to notice that the results we will present can be generalised to anisotropic grids with further work. Following \cite{Perotto} some of these generalisations can be found in \cite{anisotropic} and \cite{anisotropic2}.\\
 
-By theorem 4.6 of \cite{Perotto} we have:
+By theorem 4.7 of \cite{Perotto} we have:
 $$ \norm{c-c_h}_{H^1(\Omega)} \leq \frac{M}{\alpha} C_e h^r |c|_{H^{r+1}(\Omega)} $$
 where $C_e$ is a constant independent of h and u, $M,\alpha$ are respectively the continuity and the coercivity constant of the bilinear form, and we have used the regularity of the mesh. \\
 And from exercise session 13 we have:
@@ -373,7 +373,9 @@ And from exercise session 13 we have:
 	&C_d h^{r+1}
 (|u|_{H^{r+1}(\Omega)}+|div(u)|_{H^{r+1}(\Omega)}+|p|_{H^{r+1}(\Omega)})
 \end{align*}
-where $C_d$ is a constant independent of $h$ and $u$.
+where $C_d$ is a constant independent of $h$ and $u$.\\  
+
+Assuming that the solutions are regular enough, for RT1,P1,P1 we expect thus to have linear convergence for $c$ and quadratic convergence for $u$ and $p$. In the following section we will investigate if this rates are respected.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% RESULTS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
